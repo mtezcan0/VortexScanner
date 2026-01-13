@@ -4,8 +4,14 @@
 # This manifest ensures all modules for the Vortex Recon Engine are installed.
 ###############################################################################
 
-# --- Core Networking & HTTP Analysis ---
-# Handles status code verification (200, 404, etc.) and redirect tracking.
+# --- Async Networking & High-Speed Recon ---
+# Core for non-blocking HTTP requests and vulnerability testing.
+aiohttp>=3.10.0
+# High-performance asynchronous DNS resolution for subdomain enumeration.
+aiodns>=3.2.0
+
+# --- Legacy Networking (Compatibility) ---
+# Handles standard status code verification and redirect tracking.
 requests>=2.32.0
 # Thread-safe HTTP connection management (Required by Requests).
 urllib3>=2.2.0
