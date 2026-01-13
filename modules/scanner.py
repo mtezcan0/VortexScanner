@@ -1,71 +1,95 @@
-import requests
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed 
+import asyncio
+import aiohttp
 from colorama import Fore
-from urllib.parse import urljoin
 
-def load_payloads(filename):
-    path = os.path.join("data", filename)
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                return list(set(line.strip() for line in f if line.strip()))
-    except:
-        pass
-    return []
+SQLI_ERRORS = [
+    "you have an error in your sql syntax",
+    "warning: mysql_fetch_array()",
+    "unclosed quotation mark after the character string",
+    "quoted string not properly terminated",
+    "oracle error",
+    "postgre-sql error",
+    "sqlite/jdbc_driver",
+    "microsoft ole db provider for odbc drivers"
+]
 
-SQLI_PAYLOADS = load_payloads("sqli_payloads.txt")
-XSS_PAYLOADS = load_payloads("xss_payloads.txt")
-
-def test_payload(target_url, method, input_name, payload, vuln_type):
-    try:
-        data = {input_name: payload}
-        headers = {'User-Agent': 'VortexScanner/1.1 (Security Audit)'}
+async def test_sqli_async(session, url, form, semaphore):
+    async with semaphore:
+        vulnerabilities = []
+        action = form.get('action')
+        method = form.get('method', 'get').lower()
+        inputs = form.get('inputs', [])
+        target_url = url if not action else (action if action.startswith('http') else f"{url.rstrip('/')}/{action.lstrip('/')}")
         
-        if method == "post":
-            res = requests.post(target_url, data=data, headers=headers, timeout=5, allow_redirects=True)
-        else:
-            res = requests.get(target_url, params=data, headers=headers, timeout=5, allow_redirects=True)
-
-        if vuln_type == "SQLi":
-            errors = [
-                "sql syntax", "mysql_fetch_array", "system.data.sqlclient", 
-                "oracle error", "postgre", "driver queries", "sqlite3.error"
-            ]
-            if any(error in res.text.lower() for error in errors):
-                return f"SQLi detected in '{input_name}' using: {payload}"
+        payloads = ["'", "\"", "';--", "') OR '1'='1"]
         
-        elif vuln_type == "XSS":
-            if payload in res.text:
-                return f"XSS detected in '{input_name}' using: {payload}"
-                
-    except:
-        pass
-    return None
+        for payload in payloads:
+            data = {}
+            for input_field in inputs:
+                if input_field.get('type') in ['text', 'search', 'password']:
+                    data[input_field['name']] = payload
+                else:
+                    data[input_field['name']] = input_field.get('value', 'test')
 
-def check_vulnerability(url, form):
-    vulnerabilities = []
-    action = form.get('action', '')
-    method = form.get('method', 'get').lower()
+            try:
+                if method == 'post':
+                    async with session.post(target_url, data=data, timeout=5) as resp:
+                        content = await resp.text()
+                else:
+                    async with session.get(target_url, params=data, timeout=5) as resp:
+                        content = await resp.text()
+
+                for error in SQLI_ERRORS:
+                    if error in content.lower():
+                        vulnerabilities.append({"type": "SQL Injection", "payload": payload, "parameter": "Multiple"})
+                        break
+            except:
+                pass
+        return vulnerabilities
+
+async def test_xss_async(session, url, form, semaphore):
+    async with semaphore:
+        vulnerabilities = []
+        action = form.get('action')
+        method = form.get('method', 'get').lower()
+        inputs = form.get('inputs', [])
+        target_url = url if not action else (action if action.startswith('http') else f"{url.rstrip('/')}/{action.lstrip('/')}")
+        
+        payload = "<script>alert('Vortex')</script>"
+        data = {}
+        for input_field in inputs:
+            if input_field.get('type') in ['text', 'search']:
+                data[input_field['name']] = payload
+            else:
+                data[input_field['name']] = input_field.get('value', 'test')
+
+        try:
+            if method == 'post':
+                async with session.post(target_url, data=data, timeout=5) as resp:
+                    content = await resp.text()
+            else:
+                async with session.get(target_url, params=data, timeout=5) as resp:
+                    content = await resp.text()
+
+            if payload in content:
+                vulnerabilities.append({"type": "Reflected XSS", "payload": payload, "parameter": "Multiple"})
+        except:
+            pass
+        return vulnerabilities
+
+async def start_scanning_async(url, forms):
+    semaphore = asyncio.Semaphore(10)
+    all_vulns = []
     
-    target_url = urljoin(url, action)
-
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
         tasks = []
-        for inp in form.get('inputs', []):
-            input_name = inp.get('name')
-            input_type = inp.get('type', 'text').lower()
-            
-            if input_name and input_type in ['text', 'search', 'password', 'textarea', 'email']:
-                for p in SQLI_PAYLOADS:
-                    tasks.append(executor.submit(test_payload, target_url, method, input_name, p, "SQLi"))
+        for form in forms:
+            tasks.append(test_sqli_async(session, url, form, semaphore))
+            tasks.append(test_xss_async(session, url, form, semaphore))
+        
+        results = await asyncio.gather(*tasks)
+        for res in results:
+            if res:
+                all_vulns.extend(res)
                 
-                for p in XSS_PAYLOADS:
-                    tasks.append(executor.submit(test_payload, target_url, method, input_name, p, "XSS"))
-
-        for future in as_completed(tasks):
-            result = future.result()
-            if result:
-                vulnerabilities.append(result)
-
-    return list(set(vulnerabilities))
+    return all_vulns
