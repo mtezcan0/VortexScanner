@@ -9,7 +9,8 @@ found_subdomains = {}
 
 async def check_http(session, target):
     try:
-        async with session.get(f"http://{target}", timeout=2, allow_redirects=True) as response:
+        url = f"http://{target}"
+        async with session.get(url, timeout=3, allow_redirects=True) as response:
             return response.status
     except:
         return "TIMEOUT"
@@ -22,23 +23,31 @@ async def resolve_dns(resolver, session, full_domain, semaphore):
             status = await check_http(session, full_domain)
             
             color = Fore.GREEN if status == 200 else Fore.YELLOW
-            print(f"{color}[+] Found: {full_domain:<25} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
+            print(f"{color}[+] Found: {full_domain:<30} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
             
             found_subdomains[full_domain] = {"ip": ip, "status": status}
         except:
             pass
 
-async def start_subdomain_scan_async(domain, wordlist_path, concurrency=100):
+async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", concurrency=100):
     found_subdomains.clear()
+    
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    wordlist_path = os.path.join(base_dir, "data", wordlist_name)
+    
     resolver = aiodns.DNSResolver()
     semaphore = asyncio.Semaphore(concurrency)
-    
     root_domain = domain.strip('.')
     
     print(f"{Fore.BLUE}[*] Starting Async Scan: {root_domain}")
     print(f"[*] Max Concurrency: {concurrency}\n{Fore.RESET}")
 
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+    conn = aiohttp.TCPConnector(ssl=False, limit=0, limit_per_host=0)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
         tasks = []
         tasks.append(resolve_dns(resolver, session, root_domain, semaphore))
         
@@ -47,7 +56,10 @@ async def start_subdomain_scan_async(domain, wordlist_path, concurrency=100):
                 for line in f:
                     sub = line.strip().strip('.')
                     if sub:
-                        tasks.append(resolve_dns(resolver, session, f"{sub}.{root_domain}", semaphore))
+                        full_domain = f"{sub}.{root_domain}"
+                        tasks.append(resolve_dns(resolver, session, full_domain, semaphore))
+        else:
+            print(f"{Fore.RED}[!] Wordlist not found at: {wordlist_path}{Fore.RESET}")
         
         await asyncio.gather(*tasks)
     
@@ -57,12 +69,15 @@ def save_subdomain_report(target, results_dict):
     if not results_dict:
         return None
 
-    if not os.path.exists("reports"):
-        os.makedirs("reports")
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    report_dir = os.path.join(base_dir, "reports")
+    
+    if not os.path.exists(report_dir):
+        os.makedirs(report_dir)
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     file_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-    filename = f"reports/{target}_{file_timestamp}.txt"
+    filename = os.path.join(report_dir, f"{target}_subdomain_report_{file_timestamp}.txt")
 
     with open(filename, "w", encoding="utf-8") as f:
         f.write("="*75 + "\n")

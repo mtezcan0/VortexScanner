@@ -2,21 +2,25 @@ import asyncio
 import argparse
 import sys
 import time
+import os
 from colorama import Fore, Style, init
 from modules.subdomain import start_subdomain_scan_async
 from modules.crawler import start_crawling_async
 from modules.scanner import start_scanning_async
 from modules.reporter import generate_reports
 
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 init(autoreset=True)
 
 def print_banner():
     banner = r"""
-   _    ______  ____  _____________  __
-  | |  / / __ \/ __ \/_  __/ ____/ |/ /
-  | | / / / / / /_/ / / / / __/  |   / 
-  | |/ / /_/ / _, _/ / / / /___ /    | 
-  |___/\____/_/ |_| /_/ /_____//_/|_| 
+   _      ______  ____  _____________  __
+  | |    / / __ \/ __ \/_  __/ ____/ |/ /
+  | |   / / / / / /_/ / / / / __/    |   / 
+  | |  / / /_/ / _, _/ / / / /___    |  | 
+  |___/\____/_/ |_| /_/ /_____/   |__| 
 
   Vortex Cyber Scanner - Advanced Recon Edition (2026)
   Developed by Mehmet Tezcan 
@@ -24,28 +28,33 @@ def print_banner():
     """
     print(f"{Fore.CYAN}{Style.BRIGHT}{banner}")
 
-async def run_full_analysis(url):
-    print(f"{Fore.BLUE}🔎 Deep Crawling: {url}")
-    all_forms = await start_crawling_async(url)
-    
-    vulns = []
-    if all_forms:
-        print(f"    {Fore.GREEN}[+] {len(all_forms)} forms detected across all discovered pages.")
-        print(f"    {Fore.YELLOW}[*] Launching asynchronous vulnerability payloads...")
-        vulns = await start_scanning_async(url, all_forms)
-    else:
-        print(f"    {Fore.WHITE}[i] No entry points found in discovered links.")
-    
-    return {"url": url, "forms_found": len(all_forms), "vulnerabilities": vulns}
+async def run_full_analysis(url, semaphore):
+    async with semaphore:
+        print(f"{Fore.BLUE}[*] Deep Crawling: {url}")
+        try:
+            all_forms = await start_crawling_async(url)
+            
+            vulns = []
+            if all_forms:
+                print(f"    {Fore.GREEN}[+] {len(all_forms)} forms detected on {url}")
+                if len(all_forms) > 0:
+                    print(f"    {Fore.YELLOW}[>] Launching payloads on {url}...")
+                    vulns = await start_scanning_async(url, all_forms)
+            else:
+                print(f"    {Fore.WHITE}[i] No forms found on {url}")
+            
+            return {"url": url, "forms_found": len(all_forms), "vulnerabilities": vulns}
+        except Exception as e:
+            return {"url": url, "forms_found": 0, "vulnerabilities": []}
 
 async def main():
     print_banner()
 
-    parser = argparse.ArgumentParser(description="Vortex Cyber Scanner - High-Speed Async Recon Tool")
+    parser = argparse.ArgumentParser(description="Vortex Cyber Scanner")
     parser.add_argument("-d", "--domain", help="Target domain (e.g., example.com)")
-    parser.add_argument("-w", "--wordlist", default="data/subdomains.txt", help="Subdomain wordlist path")
-    parser.add_argument("-t", "--threads", type=int, default=100, help="Max concurrent requests")
-    parser.add_argument("-o", "--output", action="store_true", help="Generate final reports")
+    parser.add_argument("-w", "--wordlist", default="subdomains.txt", help="Wordlist filename in data folder")
+    parser.add_argument("-t", "--threads", type=int, default=50, help="DNS Concurrency limit")
+    parser.add_argument("-o", "--output", action="store_true", help="Generate HTML report")
     args = parser.parse_args()
 
     if not args.domain:
@@ -53,53 +62,63 @@ async def main():
         sys.exit(1)
 
     target_domain = args.domain
-    wordlist = args.wordlist
-    concurrency_limit = args.threads
+    wordlist_name = os.path.basename(args.wordlist)
+    dns_concurrency = args.threads
 
     print(f"{Fore.BLUE}[*] Target: {target_domain}")
-    print(f"[*] Max Concurrency: {concurrency_limit}")
+    print(f"[*] Wordlist: {wordlist_name}")
     print("-" * 60)
 
     start_time = time.time()
 
-    print(f"\n{Fore.YELLOW}[PHASE 1] Async Subdomain Enumeration Started...")
-    subdomain_results = await start_subdomain_scan_async(target_domain, wordlist, concurrency_limit)
+    print(f"\n{Fore.YELLOW}[PHASE 1] Async Subdomain Enumeration...")
+    subdomain_results = await start_subdomain_scan_async(target_domain, wordlist_name, dns_concurrency)
 
     active_targets = [f"http://{sub}" for sub, data in subdomain_results.items() if data.get('status') == 200]
 
     if not active_targets:
-        print(f"{Fore.RED}[!] No active targets found. Exiting.")
+        print(f"\n{Fore.RED}[!] No active HTTP targets found to scan. Exiting.")
         return
 
-    print(f"\n{Fore.YELLOW}[PHASE 2 & 3] Analyzing {len(active_targets)} Targets (Deep Crawling & Vulns)...")
+    print(f"\n{Fore.YELLOW}[PHASE 2 & 3] Analyzing {len(active_targets)} Live Targets...")
+    
+    
+    scan_semaphore = asyncio.Semaphore(5)
     
     scan_tasks = []
     for url in active_targets:
-        scan_tasks.append(run_full_analysis(url))
+        scan_tasks.append(run_full_analysis(url, scan_semaphore))
     
     all_scan_results = await asyncio.gather(*scan_tasks)
     
     final_results = {}
+    total_vulns = 0
+
     for sub, data in subdomain_results.items():
         url = f"http://{sub}"
         scan_data = next((res for res in all_scan_results if res['url'] == url), None)
         
+        forms = scan_data['forms_found'] if scan_data else 0
+        vulns = scan_data['vulnerabilities'] if scan_data else []
+        total_vulns += len(vulns)
+
         final_results[sub] = {
             "ip": data.get("ip"),
             "status": data.get("status"),
             "findings": {
-                "forms_found": scan_data['forms_found'] if scan_data else 0,
-                "vulnerabilities": scan_data['vulnerabilities'] if scan_data else []
+                "forms_found": forms,
+                "vulnerabilities": vulns
             }
         }
 
     if args.output:
-        print(f"\n{Fore.YELLOW}[PHASE 4] Generating Final Reports...")
-        generate_reports(target_domain, final_results)
+        print(f"\n{Fore.YELLOW}[PHASE 4] Generating Report...")
+        report_file = generate_reports(target_domain, final_results)
+        print(f"{Fore.GREEN}[+] Report saved to: {report_file}")
 
     end_time = time.time()
     duration = round(end_time - start_time, 2)
-    print(f"\n{Fore.GREEN}[*] Scan Complete in {duration} seconds. Good luck!")
+    print(f"\n{Fore.MAGENTA}[*] Scan Complete in {duration} seconds. Found {total_vulns} vulnerabilities.")
 
 def run_main():
     try:

@@ -1,37 +1,24 @@
 ###############################################################################
-# VORTEX CYBER SCANNER - Dependency Manifest (2026 Edition)
-# 
-# This manifest ensures all modules for the Vortex Recon Engine are installed.
+# VORTEX CYBER SCANNER - Requirements
+# Clean & Fast Async Build
 ###############################################################################
 
-# --- Async Networking & High-Speed Recon ---
-# Core for non-blocking HTTP requests and vulnerability testing.
-aiohttp>=3.10.0
-# High-performance asynchronous DNS resolution for subdomain enumeration.
-aiodns>=3.2.0
+# --- Core Async Networking (High Performance) ---
+# For all HTTP requests and scanning operations
+aiohttp>=3.9.0
+# Fast DNS resolution (Required for subdomain enumeration)
+aiodns>=3.1.0
 
-# --- Legacy Networking (Compatibility) ---
-# Handles standard status code verification and redirect tracking.
-requests>=2.32.0
-# Thread-safe HTTP connection management (Required by Requests).
-urllib3>=2.2.0
-
-# --- Intelligence & HTML Analysis ---
-# Future-proofing for web crawling and link extraction.
-beautifulsoup4>=4.12.3
-# Fast C-based parser for high-speed HTML data processing.
+# --- HTML Processing ---
+# For parsing page source and extraction
+beautifulsoup4>=4.12.0
+# Fast C-based parser for BeautifulSoup
 lxml>=5.1.0
 
-# --- Terminal UI & UX Aesthetics ---
-# Provides cross-platform colored output for scan results.
+# --- UI & Utilities ---
+# For colored terminal outputs
 colorama>=0.4.6
-# Renders the "VORTEX" ASCII art banner during startup.
-pyfiglet>=1.0.2
 
-# --- Data Validation & Helpers ---
-# Used for sanitizing target domains and IP inputs.
-validators>=0.28.0
-
-###############################################################################
-# Installation: pip install -r requirements.txt
-###############################################################################
+# --- Windows Compatibility (Optional but Recommended) ---
+# May be required if aiodns encounters issues on Windows; usually automatic.
+pycares>=4.4.0
