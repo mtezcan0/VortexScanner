@@ -3,7 +3,8 @@ import argparse
 import sys
 import time
 import os
-import aiohttp # IP kontrolu icin eklendi
+import aiohttp
+import re 
 from colorama import Fore, Style, init
 from modules.subdomain import start_subdomain_scan_async
 from modules.crawler import start_crawling_async
@@ -14,6 +15,7 @@ if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 init(autoreset=True)
+
 
 def print_banner():
     banner = r"""
@@ -30,7 +32,6 @@ def print_banner():
     print(f"{Fore.CYAN}{Style.BRIGHT}{banner}")
 
 async def check_direct_target(url):
-    
     target_url = url if url.startswith("http") else f"http://{url}"
     try:
         async with aiohttp.ClientSession() as session:
@@ -41,12 +42,18 @@ async def check_direct_target(url):
         return None
     return None
 
+def is_ip_address(target):
+    
+    
+    ip_pattern = re.compile(r'^(\d{1,3}\.){3}\d{1,3}(:\d+)?$')
+    return ip_pattern.match(target) is not None
+
 async def run_full_analysis(url, semaphore):
+    
     async with semaphore:
         print(f"{Fore.BLUE}[*] Deep Crawling: {url}")
         try:
             all_forms = await start_crawling_async(url)
-            
             vulns = []
             if all_forms:
                 print(f"    {Fore.GREEN}[+] {len(all_forms)} forms detected on {url}")
@@ -55,7 +62,6 @@ async def run_full_analysis(url, semaphore):
                     vulns = await start_scanning_async(url, all_forms)
             else:
                 print(f"    {Fore.WHITE}[i] No forms found on {url}")
-            
             return {"url": url, "forms_found": len(all_forms), "vulnerabilities": vulns}
         except Exception as e:
             return {"url": url, "forms_found": 0, "vulnerabilities": []}
@@ -83,28 +89,38 @@ async def main():
     print("-" * 60)
 
     start_time = time.time()
-
-    print(f"\n{Fore.YELLOW}[PHASE 1] Async Subdomain Enumeration...")
     
-    
-    subdomain_results = await start_subdomain_scan_async(target_domain, wordlist_name, dns_concurrency)
-    active_targets = [f"http://{sub}" for sub, data in subdomain_results.items() if data.get('status') == 200]
+    subdomain_results = {}
+    active_targets = []
 
     
-    
-    if not active_targets:
-        print(f"{Fore.YELLOW}[!] No subdomains found. Checking target directly (IP/Port Mode)...")
-        direct_url = await check_direct_target(target_domain)
+    if is_ip_address(target_domain):
+        print(f"\n{Fore.YELLOW}[!] IP Address detected. Skipping Subdomain Enumeration.")
+        print(f"{Fore.CYAN}[*] Switching directly to Deep Scan Mode...{Fore.RESET}")
         
+        direct_url = await check_direct_target(target_domain)
         if direct_url:
-            print(f"{Fore.GREEN}[+] Target is UP! Switching to Direct Scan Mode: {direct_url}")
             active_targets.append(direct_url)
-            
-            subdomain_results[target_domain] = {"ip": "Direct", "status": 200}
+            subdomain_results[target_domain] = {"ip": target_domain, "status": 200}
         else:
-            print(f"{Fore.RED}[!] Target {target_domain} is unreachable. Exiting.")
-            return
-    
+             print(f"{Fore.RED}[!] Target {target_domain} seems down. Exiting.")
+             return
+    else:
+        
+        print(f"\n{Fore.YELLOW}[PHASE 1] Async Subdomain Enumeration...")
+        subdomain_results = await start_subdomain_scan_async(target_domain, wordlist_name, dns_concurrency)
+        active_targets = [f"http://{sub}" for sub, data in subdomain_results.items() if data.get('status') == 200]
+
+        if not active_targets:
+            print(f"{Fore.YELLOW}[!] No subdomains found. Checking target directly...")
+            direct_url = await check_direct_target(target_domain)
+            if direct_url:
+                print(f"{Fore.GREEN}[+] Target is UP! Switching to Direct Scan Mode: {direct_url}")
+                active_targets.append(direct_url)
+                subdomain_results[target_domain] = {"ip": "Direct", "status": 200}
+            else:
+                print(f"{Fore.RED}[!] Target {target_domain} is unreachable. Exiting.")
+                return
 
     print(f"\n{Fore.YELLOW}[PHASE 2 & 3] Analyzing {len(active_targets)} Live Targets...")
     
@@ -120,14 +136,13 @@ async def main():
     total_vulns = 0
 
     for sub, data in subdomain_results.items():
-        
         url = sub if sub.startswith("http") else f"http://{sub}"
-        
-        
         scan_data = next((res for res in all_scan_results if res['url'] == url), None)
         
-      
-        if not scan_data:
+        
+        if not scan_data and is_ip_address(target_domain):
+             scan_data = next((res for res in all_scan_results if target_domain in res['url']), None)
+        elif not scan_data:
              scan_data = next((res for res in all_scan_results if sub in res['url']), None)
 
         forms = scan_data['forms_found'] if scan_data else 0
