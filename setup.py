@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='vortexscan',
-    version='1.1.0',  
+    version='1.1.0',
     py_modules=['main'],
     packages=find_packages(),
     install_requires=[
@@ -17,7 +17,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'vortexscan=main:main',
+            'vortexscan=main:run_main',
         ],
     },
 )

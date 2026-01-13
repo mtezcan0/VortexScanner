@@ -26,10 +26,13 @@ async def test_sqli_async(session, url, form, semaphore):
         for payload in payloads:
             data = {}
             for input_field in inputs:
+                name = input_field.get('name')
+                if not name:
+                    continue
                 if input_field.get('type') in ['text', 'search', 'password']:
-                    data[input_field['name']] = payload
+                    data[name] = payload
                 else:
-                    data[input_field['name']] = input_field.get('value', 'test')
+                    data[name] = input_field.get('value', 'test')
 
             try:
                 if method == 'post':
@@ -41,7 +44,7 @@ async def test_sqli_async(session, url, form, semaphore):
 
                 for error in SQLI_ERRORS:
                     if error in content.lower():
-                        vulnerabilities.append({"type": "SQL Injection", "payload": payload, "parameter": "Multiple"})
+                        vulnerabilities.append({"type": "SQL Injection", "payload": payload, "parameter": name})
                         break
             except:
                 pass
@@ -58,10 +61,13 @@ async def test_xss_async(session, url, form, semaphore):
         payload = "<script>alert('Vortex')</script>"
         data = {}
         for input_field in inputs:
+            name = input_field.get('name')
+            if not name:
+                continue
             if input_field.get('type') in ['text', 'search']:
-                data[input_field['name']] = payload
+                data[name] = payload
             else:
-                data[input_field['name']] = input_field.get('value', 'test')
+                data[name] = input_field.get('value', 'test')
 
         try:
             if method == 'post':
@@ -72,7 +78,7 @@ async def test_xss_async(session, url, form, semaphore):
                     content = await resp.text()
 
             if payload in content:
-                vulnerabilities.append({"type": "Reflected XSS", "payload": payload, "parameter": "Multiple"})
+                vulnerabilities.append({"type": "Reflected XSS", "payload": payload, "parameter": name})
         except:
             pass
         return vulnerabilities

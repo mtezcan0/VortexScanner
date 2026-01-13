@@ -11,18 +11,31 @@ from modules.reporter import generate_reports
 init(autoreset=True)
 
 def print_banner():
-    banner = f"""
-{Fore.CYAN}{Style.BRIGHT}   _    ______  ____  _____________  __
+    banner = r"""
+   _    ______  ____  _____________  __
   | |  / / __ \/ __ \/_  __/ ____/ |/ /
   | | / / / / / /_/ / / / / __/  |   / 
   | |/ / /_/ / _, _/ / / / /___ /    | 
   |___/\____/_/ |_| /_/ /_____//_/|_| 
 
-{Fore.WHITE}  Vortex Cyber Scanner - Advanced Recon Edition (2026)
-{Fore.YELLOW}  Developed by Mehmet Tezcan 
-{Fore.WHITE}  ============================================================
+  Vortex Cyber Scanner - Advanced Recon Edition (2026)
+  Developed by Mehmet Tezcan 
+  ============================================================
     """
-    print(banner)
+    print(f"{Fore.CYAN}{Style.BRIGHT}{banner}")
+
+async def run_full_analysis(url):
+    print(f"{Fore.BLUE}🔎 Testing: {url}")
+    forms = await start_crawling_async(url)
+    
+    vulns = []
+    if forms:
+        print(f"    {Fore.GREEN}[+] {len(forms)} forms detected. Starting automated payloads...")
+        vulns = await start_scanning_async(url, forms)
+    else:
+        print(f"    {Fore.WHITE}[i] No forms found on the landing page.")
+    
+    return {"url": url, "forms_found": len(forms), "vulnerabilities": vulns}
 
 async def main():
     print_banner()
@@ -30,8 +43,8 @@ async def main():
     parser = argparse.ArgumentParser(description="Vortex Cyber Scanner - High-Speed Async Recon Tool")
     parser.add_argument("-d", "--domain", help="Target domain (e.g., example.com)")
     parser.add_argument("-w", "--wordlist", default="data/subdomains.txt", help="Subdomain wordlist path")
-    parser.add_argument("-t", "--threads", type=int, default=100, help="Max concurrent requests (Semaphore)")
-    parser.add_argument("-o", "--output", action="store_true", help="Generate final reports (JSON/HTML)")
+    parser.add_argument("-t", "--threads", type=int, default=100, help="Max concurrent requests")
+    parser.add_argument("-o", "--output", action="store_true", help="Generate final reports")
     args = parser.parse_args()
 
     if not args.domain:
@@ -81,19 +94,6 @@ async def main():
     end_time = time.time()
     duration = round(end_time - start_time, 2)
     print(f"\n{Fore.GREEN}[*] Scan Complete in {duration} seconds. Good luck!")
-
-async def run_full_analysis(url):
-    print(f"{Fore.BLUE}🔎 Testing: {url}")
-    forms = await start_crawling_async(url)
-    
-    vulns = []
-    if forms:
-        print(f"    {Fore.GREEN}[+] {len(forms)} forms detected. Starting automated payloads...")
-        vulns = await start_scanning_async(url, forms)
-    else:
-        print(f"    {Fore.WHITE}[i] No forms found on the landing page.")
-    
-    return {"url": url, "forms_found": len(forms), "vulnerabilities": vulns}
 
 if __name__ == "__main__":
     try:
