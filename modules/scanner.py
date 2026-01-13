@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+import os
 from colorama import Fore
 
 SQLI_ERRORS = [
@@ -13,7 +14,13 @@ SQLI_ERRORS = [
     "microsoft ole db provider for odbc drivers"
 ]
 
-async def test_sqli_async(session, url, form, semaphore):
+def load_payloads(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding="utf-8", errors="ignore") as f:
+            return [line.strip() for line in f if line.strip()]
+    return []
+
+async def test_sqli_async(session, url, form, payloads, semaphore):
     async with semaphore:
         vulnerabilities = []
         action = form.get('action')
@@ -21,14 +28,11 @@ async def test_sqli_async(session, url, form, semaphore):
         inputs = form.get('inputs', [])
         target_url = url if not action else (action if action.startswith('http') else f"{url.rstrip('/')}/{action.lstrip('/')}")
         
-        payloads = ["'", "\"", "';--", "') OR '1'='1"]
-        
         for payload in payloads:
             data = {}
             for input_field in inputs:
                 name = input_field.get('name')
-                if not name:
-                    continue
+                if not name: continue
                 if input_field.get('type') in ['text', 'search', 'password']:
                     data[name] = payload
                 else:
@@ -45,12 +49,12 @@ async def test_sqli_async(session, url, form, semaphore):
                 for error in SQLI_ERRORS:
                     if error in content.lower():
                         vulnerabilities.append({"type": "SQL Injection", "payload": payload, "parameter": name})
-                        break
+                        return vulnerabilities
             except:
                 pass
         return vulnerabilities
 
-async def test_xss_async(session, url, form, semaphore):
+async def test_xss_async(session, url, form, payloads, semaphore):
     async with semaphore:
         vulnerabilities = []
         action = form.get('action')
@@ -58,40 +62,48 @@ async def test_xss_async(session, url, form, semaphore):
         inputs = form.get('inputs', [])
         target_url = url if not action else (action if action.startswith('http') else f"{url.rstrip('/')}/{action.lstrip('/')}")
         
-        payload = "<script>alert('Vortex')</script>"
-        data = {}
-        for input_field in inputs:
-            name = input_field.get('name')
-            if not name:
-                continue
-            if input_field.get('type') in ['text', 'search']:
-                data[name] = payload
-            else:
-                data[name] = input_field.get('value', 'test')
+        for payload in payloads:
+            data = {}
+            for input_field in inputs:
+                name = input_field.get('name')
+                if not name: continue
+                if input_field.get('type') in ['text', 'search']:
+                    data[name] = payload
+                else:
+                    data[name] = input_field.get('value', 'test')
 
-        try:
-            if method == 'post':
-                async with session.post(target_url, data=data, timeout=5) as resp:
-                    content = await resp.text()
-            else:
-                async with session.get(target_url, params=data, timeout=5) as resp:
-                    content = await resp.text()
+            try:
+                if method == 'post':
+                    async with session.post(target_url, data=data, timeout=5) as resp:
+                        content = await resp.text()
+                else:
+                    async with session.get(target_url, params=data, timeout=5) as resp:
+                        content = await resp.text()
 
-            if payload in content:
-                vulnerabilities.append({"type": "Reflected XSS", "payload": payload, "parameter": name})
-        except:
-            pass
+                if payload in content:
+                    vulnerabilities.append({"type": "Reflected XSS", "payload": payload, "parameter": name})
+                    return vulnerabilities
+            except:
+                pass
         return vulnerabilities
 
 async def start_scanning_async(url, forms):
-    semaphore = asyncio.Semaphore(10)
+    semaphore = asyncio.Semaphore(20)
     all_vulns = []
     
+    sqli_list = load_payloads("data/sqli_payloads.txt")
+    xss_list = load_payloads("data/xss_payloads.txt")
+    
+    if not sqli_list and not xss_list:
+        return []
+
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
         tasks = []
         for form in forms:
-            tasks.append(test_sqli_async(session, url, form, semaphore))
-            tasks.append(test_xss_async(session, url, form, semaphore))
+            if sqli_list:
+                tasks.append(test_sqli_async(session, url, form, sqli_list, semaphore))
+            if xss_list:
+                tasks.append(test_xss_async(session, url, form, xss_list, semaphore))
         
         results = await asyncio.gather(*tasks)
         for res in results:
