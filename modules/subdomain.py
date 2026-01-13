@@ -6,35 +6,37 @@ import datetime
 from queue import Queue
 from colorama import Fore
 
-
 found_subdomains = {}
-
 print_lock = threading.Lock()
 
 def request_dns(target):
-    """Hedef domain için DNS sorgusu yapar ve HTTP durum kodunu kontrol eder."""
+    
+    
+    target = target.strip('.')
+    
+    
+    if not target or '..' in target:
+        return
+
     try:
-       
+        
         ip = socket.gethostbyname(target)
         status_code = "N/A"
 
         try:
-           
+            
             response = requests.get(f"http://{target}", timeout=3, allow_redirects=True)
             status_code = response.status_code
         except:
-            
             status_code = "TIMEOUT"
 
         with print_lock:
-            
             color = Fore.GREEN if status_code == 200 else Fore.YELLOW
             print(f"{color}[+] Found: {target:<25} | IP: {ip:<15} | Status: {status_code}{Fore.RESET}")
             
-           
-        found_subdomains[target] = {"ip": ip, "status": status_code}
+            found_subdomains[target] = {"ip": ip, "status": status_code}
 
-    except (socket.gaierror, socket.timeout):
+    except (socket.gaierror, socket.timeout, UnicodeError):
         
         pass
 
@@ -50,26 +52,26 @@ def start_subdomain_scan(domain, wordlist_path, thread_count=50):
     q = Queue()
     found_subdomains.clear()
 
-    
-    q.put(domain)
+   
+    root_domain = domain.strip('.')
+    q.put(root_domain)
 
-    
     try:
         if os.path.exists(wordlist_path):
-            with open(wordlist_path, 'r', encoding="utf-8") as f:
+           
+            with open(wordlist_path, 'r', encoding="utf-8", errors="ignore") as f:
                 for line in f:
-                    clean_line = line.strip()
-                    if clean_line:
-                        q.put(f"{clean_line}.{domain}")
+                    sub = line.strip().strip('.')
+                    if sub:
+                        q.put(f"{sub}.{root_domain}")
         else:
-            print(f"{Fore.RED}[!] Wordlist dosyası bulunamadı, sadece ana domain taranıyor.{Fore.RESET}")
+            print(f"{Fore.RED}[!] Wordlist file not found. Scanning root domain only.{Fore.RESET}")
     except Exception as e:
-        print(f"{Fore.RED}[!] Hata: {e}{Fore.RESET}")
+        print(f"{Fore.RED}[!] Error reading wordlist: {e}{Fore.RESET}")
     
-    print(f"{Fore.BLUE}[*] Tarama başlatıldı: {domain}")
-    print(f"[*] {thread_count} thread kullanılıyor...\n{Fore.RESET}")
+    print(f"{Fore.BLUE}[*] Starting Scan: {root_domain}")
+    print(f"[*] Threads: {thread_count}\n{Fore.RESET}")
 
-    
     threads = []
     for _ in range(thread_count):
         t = threading.Thread(target=worker, args=(q,))
@@ -77,15 +79,13 @@ def start_subdomain_scan(domain, wordlist_path, thread_count=50):
         t.start()
         threads.append(t)
 
-    
     q.join()
-
     return found_subdomains
 
 def save_subdomain_report(target, results_dict):
-    """Sonuçları 'reports' klasörüne profesyonel bir formatta kaydeder."""
+    
     if not results_dict:
-        print(f"{Fore.RED}[!] Hiç sonuç bulunamadı, rapor oluşturulmuyor.{Fore.RESET}")
+        print(f"{Fore.RED}[!] No results found. Report skipped.{Fore.RESET}")
         return None
 
     if not os.path.exists("reports"):
@@ -106,6 +106,5 @@ def save_subdomain_report(target, results_dict):
         for sub, data in results_dict.items():
             f.write(f"{sub:<35} | {data['ip']:<15} | {data['status']:<10}\n")
             
-    print(f"\n{Fore.CYAN}[i] Rapor kaydedildi: {filename}{Fore.RESET}")
+    print(f"\n{Fore.CYAN}[i] Report saved to: {filename}{Fore.RESET}")
     return filename
-
