@@ -35,7 +35,7 @@ Reporting Phase: Sanitizes results using html.escape to prevent Self-XSS in the 
 Bash
 
 # Clone the repository
-git clone https://github.com/yourusername/VortexScanner.git
+git clone https://github.com/mtezcan0/VortexScanner.git
 cd VortexScanner
 
 # Install dependencies
