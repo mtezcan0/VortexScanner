@@ -19,23 +19,24 @@ def print_banner():
   |___/\____/_/ |_| /_/ /_____//_/|_| 
 
   Vortex Cyber Scanner - Advanced Recon Edition (2026)
-  Developed by Mehmet Tezcan | KTÜN Computer Engineering
+  Developed by Mehmet Tezcan 
   ============================================================
     """
     print(f"{Fore.CYAN}{Style.BRIGHT}{banner}")
 
 async def run_full_analysis(url):
-    print(f"{Fore.BLUE}🔎 Testing: {url}")
-    forms = await start_crawling_async(url)
+    print(f"{Fore.BLUE}🔎 Deep Crawling: {url}")
+    all_forms = await start_crawling_async(url)
     
     vulns = []
-    if forms:
-        print(f"    {Fore.GREEN}[+] {len(forms)} forms detected. Starting automated payloads...")
-        vulns = await start_scanning_async(url, forms)
+    if all_forms:
+        print(f"    {Fore.GREEN}[+] {len(all_forms)} forms detected across all discovered pages.")
+        print(f"    {Fore.YELLOW}[*] Launching asynchronous vulnerability payloads...")
+        vulns = await start_scanning_async(url, all_forms)
     else:
-        print(f"    {Fore.WHITE}[i] No forms found on the landing page.")
+        print(f"    {Fore.WHITE}[i] No entry points found in discovered links.")
     
-    return {"url": url, "forms_found": len(forms), "vulnerabilities": vulns}
+    return {"url": url, "forms_found": len(all_forms), "vulnerabilities": vulns}
 
 async def main():
     print_banner()
@@ -70,7 +71,7 @@ async def main():
         print(f"{Fore.RED}[!] No active targets found. Exiting.")
         return
 
-    print(f"\n{Fore.YELLOW}[PHASE 2 & 3] Analyzing {len(active_targets)} Targets (Forms & Vulns)...")
+    print(f"\n{Fore.YELLOW}[PHASE 2 & 3] Analyzing {len(active_targets)} Targets (Deep Crawling & Vulns)...")
     
     scan_tasks = []
     for url in active_targets:
@@ -81,10 +82,15 @@ async def main():
     final_results = {}
     for sub, data in subdomain_results.items():
         url = f"http://{sub}"
+        scan_data = next((res for res in all_scan_results if res['url'] == url), None)
+        
         final_results[sub] = {
             "ip": data.get("ip"),
             "status": data.get("status"),
-            "findings": next((res for res in all_scan_results if res['url'] == url), {"forms_found": 0, "vulnerabilities": []})
+            "findings": {
+                "forms_found": scan_data['forms_found'] if scan_data else 0,
+                "vulnerabilities": scan_data['vulnerabilities'] if scan_data else []
+            }
         }
 
     if args.output:
