@@ -3,6 +3,7 @@ import argparse
 import sys
 import time
 import os
+import aiohttp # IP kontrolu icin eklendi
 from colorama import Fore, Style, init
 from modules.subdomain import start_subdomain_scan_async
 from modules.crawler import start_crawling_async
@@ -27,6 +28,18 @@ def print_banner():
   ============================================================
     """
     print(f"{Fore.CYAN}{Style.BRIGHT}{banner}")
+
+async def check_direct_target(url):
+    
+    target_url = url if url.startswith("http") else f"http://{url}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(target_url, timeout=5) as resp:
+                if resp.status == 200:
+                    return target_url
+    except:
+        return None
+    return None
 
 async def run_full_analysis(url, semaphore):
     async with semaphore:
@@ -72,16 +85,28 @@ async def main():
     start_time = time.time()
 
     print(f"\n{Fore.YELLOW}[PHASE 1] Async Subdomain Enumeration...")
+    
+    
     subdomain_results = await start_subdomain_scan_async(target_domain, wordlist_name, dns_concurrency)
-
     active_targets = [f"http://{sub}" for sub, data in subdomain_results.items() if data.get('status') == 200]
 
+    
+    
     if not active_targets:
-        print(f"\n{Fore.RED}[!] No active HTTP targets found to scan. Exiting.")
-        return
+        print(f"{Fore.YELLOW}[!] No subdomains found. Checking target directly (IP/Port Mode)...")
+        direct_url = await check_direct_target(target_domain)
+        
+        if direct_url:
+            print(f"{Fore.GREEN}[+] Target is UP! Switching to Direct Scan Mode: {direct_url}")
+            active_targets.append(direct_url)
+            
+            subdomain_results[target_domain] = {"ip": "Direct", "status": 200}
+        else:
+            print(f"{Fore.RED}[!] Target {target_domain} is unreachable. Exiting.")
+            return
+    
 
     print(f"\n{Fore.YELLOW}[PHASE 2 & 3] Analyzing {len(active_targets)} Live Targets...")
-    
     
     scan_semaphore = asyncio.Semaphore(5)
     
@@ -95,9 +120,16 @@ async def main():
     total_vulns = 0
 
     for sub, data in subdomain_results.items():
-        url = f"http://{sub}"
+        
+        url = sub if sub.startswith("http") else f"http://{sub}"
+        
+        # Scan sonuclarini eslestir
         scan_data = next((res for res in all_scan_results if res['url'] == url), None)
         
+      
+        if not scan_data:
+             scan_data = next((res for res in all_scan_results if sub in res['url']), None)
+
         forms = scan_data['forms_found'] if scan_data else 0
         vulns = scan_data['vulnerabilities'] if scan_data else []
         total_vulns += len(vulns)
