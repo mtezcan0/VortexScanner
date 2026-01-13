@@ -35,7 +35,7 @@ Reporting Phase: Sanitizes results using html.escape to prevent Self-XSS in the 
 Bash
 
 # Clone the repository
-git clone https://github.com/yourusername/VortexScanner.git
+git clone https://github.com/mtezcan0/VortexScanner.git
 cd VortexScanner
 
 # Install dependencies
@@ -68,7 +68,11 @@ Vulnerability Types: SQLi (Time-based & Error-based), XSS (SVG, Script, Embed-ba
 ⚖️ Legal Disclaimer
 Usage of Vortex for attacking targets without prior mutual consent is illegal. It is the end user's responsibility to obey all applicable local, state, and federal laws. Developers assume no liability and are not responsible for any misuse or damage caused by this program. For educational and ethical hacking purposes only.
 
+
 Developed by Mehmet Tezcan | Junior Penetration Tester & Computer Engineering Student
 
 
 ![alt text](image.png)
+
+Developed by Mehmet Tezcan 3rd Year Computer Engineering Student & Cybersecurity Enthusiast
+
