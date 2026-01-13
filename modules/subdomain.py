@@ -32,7 +32,7 @@ async def resolve_dns(resolver, session, full_domain, semaphore):
 async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", concurrency=100):
     found_subdomains.clear()
     
-   
+    
    
     if os.path.exists(wordlist_name):
         wordlist_path = wordlist_name
