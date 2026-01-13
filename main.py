@@ -123,7 +123,7 @@ async def main():
         
         url = sub if sub.startswith("http") else f"http://{sub}"
         
-        # Scan sonuclarini eslestir
+        
         scan_data = next((res for res in all_scan_results if res['url'] == url), None)
         
       
