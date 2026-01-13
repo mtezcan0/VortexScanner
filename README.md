@@ -42,7 +42,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies and register 'vortexscan' command globally
 pip install -r requirements.txt
-pip install -e .
+pip install -e . --break-system-packages
 
 
 ⚡ Usage
