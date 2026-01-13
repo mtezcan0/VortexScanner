@@ -106,11 +106,11 @@ def main():
         except Exception as e:
             print(f"{Fore.RED}[!] Reporting Error: {e}")
 
-    print(f"\n{Fore.YELLOW}[*] Scan Complete. Good luck, hacker!")
+    print(f"\n{Fore.YELLOW}[*] Scan Complete. Good luck!")
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n{Fore.RED}[!] Scan interrupted by user. Exiting...")
+        print(f"\n(Exiting...)")
         sys.exit(0)

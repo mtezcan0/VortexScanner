@@ -1,74 +1,101 @@
-🌀 Vortex Cyber Scanner (Advanced Recon Edition)
-Vortex is a high-performance, modular web security scanner developed for automated reconnaissance and vulnerability discovery. Built with a focus on speed and accuracy, it integrates subdomain enumeration, web crawling, and a multi-threaded vulnerability engine to identify critical security flaws like SQL Injection and Cross-Site Scripting (XSS).
+================================================================================
+  __     __          _             
+  \ \   / /__  _ __ | |_ _____  __ 
+   \ \ / / _ \| '__|| __/ _ \ \/ /  [ ADVANCED RECON EDITION ]
+    \ V / (_) | |   | ||  __/>  <   [ VERSION 1.0.0 ]
+     \_/ \___/|_|    \__\___/_/\_\ 
+                                     
+      >> HIGH-PERFORMANCE WEB SECURITY SCANNER <<
+================================================================================
 
-🚀 Features
-Subdomain Enumeration: Fast discovery of subdomains using custom wordlists to expand the attack surface.
+[i] DEVELOPED BY: Mehmet Tezcan
+[i] ROLE: Junior Penetration Tester & Computer Engineering Student
+[i] PLATFORM: Linux / Python 3.13+
 
-Form Crawler: Automatically extracts HTML forms and input fields from active web services to identify potential entry points.
+--------------------------------------------------------------------------------
+1. PROJECT OVERVIEW
+--------------------------------------------------------------------------------
+Vortex is a high-performance, modular web security scanner developed for 
+automated reconnaissance and vulnerability discovery. Built for speed and 
+accuracy, it integrates subdomain enumeration, web crawling, and a 
+multi-threaded engine to identify critical flaws like SQL Injection and XSS.
 
-High-Performance Scanning: Utilizes a multi-threaded engine (ThreadPoolExecutor) to test thousands of payloads concurrently.
+--------------------------------------------------------------------------------
+2. CORE FEATURES
+--------------------------------------------------------------------------------
+[*] Subdomain Enumeration: Rapid discovery using custom wordlists.
+[*] Intelligent Crawler: Automatically extracts HTML forms and input fields.
+[*] Vulnerability Engine:
+    - Error-Based SQLi (MySQL, Oracle, PostgreSQL, SQLite)
+    - Reflected XSS (Multi-parameter reflection analysis)
+[*] Performance: Optimized concurrency using ThreadPoolExecutor & Queue.
+[*] Professional Reporting: High-quality HTML Dashboards and JSON data export.
 
-Vulnerability Engine: Includes specialized modules for:
+--------------------------------------------------------------------------------
+3. TECHNICAL ARCHITECTURE
+--------------------------------------------------------------------------------
+[ RECON ] ----> [ ANALYSIS ] ----> [ ATTACK ] ----> [ REPORTING ]
+   |                |                 |                 |
+   |-- Subdomain    |-- Form Mapping  |-- Parallel      |-- Sanitization
+   |-- DNS Resolving|-- Parameter     |-- Payload       |-- Visual Output
+       Check            Extraction        Testing           (HTML/JSON)
 
-Error-Based SQL Injection: Detection via database-specific error signatures.
-
-Reflected XSS: Identification through payload reflection analysis.
-
-Dual-Reporting System:
-
-HTML Dashboard: Professional, dark-themed visual reports for human analysis.
-
-JSON Data: Machine-readable output for integration with other security tools.
-
-🛠️ Technical Architecture
-Vortex is designed using a modular architecture to ensure scalability and ease of maintenance:
-
-Recon Phase: Resolves subdomains and checks for active HTTP services (Status 200).
-
-Analysis Phase: Crawls discovered endpoints to map forms and parameters.
-
-Attack Phase: Executes parallelized payload testing with a focus on bypassing basic WAFs via randomized User-Agents.
-
-Reporting Phase: Sanitizes results using html.escape to prevent Self-XSS in the generated reports.
-
-💻 Installation
-Bash
-
+--------------------------------------------------------------------------------
+4. INSTALLATION & SETUP
+--------------------------------------------------------------------------------
 # Clone the repository
-git clone https://github.com/mtezcan0/VortexScanner.git
-cd VortexScanner
+$ git clone https://github.com/mtezcan0/VortexScanner.git
+$ cd VortexScanner
 
-# Install dependencies
-pip install -r requirements.txt
-⚡ Usage
-Vortex provides a flexible Command Line Interface (CLI) powered by argparse:
+# Create a virtual environment (Recommended for Kali 2026)
+$ python3 -m venv venv
+$ source venv/bin/activate
 
-Bash
+# Install dependencies and register the command
+$ pip install -r requirements.txt
+$ pip install -e . --break-system-packages
 
-# Basic usage
-python main.py -d target.com
+--------------------------------------------------------------------------------
+5. USAGE GUIDE
+--------------------------------------------------------------------------------
+After installation, run 'vortexscan' from any directory:
 
-# Advanced usage with custom threads and wordlist
-python main.py -d target.com -w data/custom_subdomains.txt -t 100
-Arguments:
+$ vortexscan --help                      # Show help menu
+$ vortexscan -d example.com              # Basic scan
+$ vortexscan -d target.com -w common.txt -t 100 -o  # Advanced scan
 
--d, --domain: Target domain to scan.
++---------+-------------+------------------------------------+-----------+
+| FLAG    | ARGUMENT    | DESCRIPTION                        | DEFAULT   |
++---------+-------------+------------------------------------+-----------+
+| -d      | --domain    | Target domain (e.g., vulnweb.com)  | REQUIRED  |
+| -w      | --wordlist  | Path to subdomain wordlist         | data/...  |
+| -t      | --threads   | Number of concurrent threads       | 50        |
+| -o      | --output    | Save results to HTML/JSON reports  | False     |
++---------+-------------+------------------------------------+-----------+
 
--w, --wordlist: Path to subdomain wordlist (Default: data/subdomains.txt).
+--------------------------------------------------------------------------------
+6. PROJECT STRUCTURE
+--------------------------------------------------------------------------------
+VortexScanner/
+├── main.py              # Main CLI Entry Point
+├── setup.py             # Package Configuration
+├── requirements.txt     # Python Dependencies
+├── data/
+│   ├── subdomains.txt   # Subdomain Wordlist
+│   ├── sqli_payloads.txt# SQL Injection Payloads
+│   └── xss_payloads.txt # XSS Payloads
+├── modules/
+│   ├── subdomain.py     # DNS Enumeration Logic
+│   ├── crawler.py       # Web Form Extraction
+│   ├── scanner.py       # Vulnerability Testing Engine
+│   └── reporter.py      # Report Generation
+└── reports/             # Generated Scan Results
 
--t, --threads: Number of concurrent threads (Default: 50).
-
-📊 Sample Output (Test Case: vulnweb.com)
-During initial testing on the vulnweb.com sandbox, Vortex successfully identified:
-
-Total Vulnerabilities Found: 484
-
-Vulnerability Types: SQLi (Time-based & Error-based), XSS (SVG, Script, Embed-based).
-
-⚖️ Legal Disclaimer
-Usage of Vortex for attacking targets without prior mutual consent is illegal. It is the end user's responsibility to obey all applicable local, state, and federal laws. Developers assume no liability and are not responsible for any misuse or damage caused by this program. For educational and ethical hacking purposes only.
-
-
-Developed by Mehmet Tezcan | Junior Penetration Tester & Computer Engineering Student
-
-
+--------------------------------------------------------------------------------
+7. LEGAL DISCLAIMER
+--------------------------------------------------------------------------------
+Usage of Vortex for attacking targets without prior mutual consent is illegal. 
+It is the end user's responsibility to obey all applicable laws. Developers 
+assume no liability and are not responsible for any misuse or damage caused 
+by this program. For educational and ethical hacking purposes only.
+================================================================================

@@ -10,21 +10,16 @@ found_subdomains = {}
 print_lock = threading.Lock()
 
 def request_dns(target):
-    
-    
     target = target.strip('.')
-    
     
     if not target or '..' in target:
         return
 
     try:
-        
         ip = socket.gethostbyname(target)
         status_code = "N/A"
 
         try:
-            
             response = requests.get(f"http://{target}", timeout=3, allow_redirects=True)
             status_code = response.status_code
         except:
@@ -33,32 +28,26 @@ def request_dns(target):
         with print_lock:
             color = Fore.GREEN if status_code == 200 else Fore.YELLOW
             print(f"{color}[+] Found: {target:<25} | IP: {ip:<15} | Status: {status_code}{Fore.RESET}")
-            
             found_subdomains[target] = {"ip": ip, "status": status_code}
 
     except (socket.gaierror, socket.timeout, UnicodeError):
-        
         pass
 
 def worker(q):
-    
     while not q.empty():
         target = q.get()
         request_dns(target)
         q.task_done()
 
 def start_subdomain_scan(domain, wordlist_path, thread_count=50):
-    
     q = Queue()
     found_subdomains.clear()
 
-   
     root_domain = domain.strip('.')
     q.put(root_domain)
 
     try:
         if os.path.exists(wordlist_path):
-           
             with open(wordlist_path, 'r', encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     sub = line.strip().strip('.')
@@ -83,7 +72,6 @@ def start_subdomain_scan(domain, wordlist_path, thread_count=50):
     return found_subdomains
 
 def save_subdomain_report(target, results_dict):
-    
     if not results_dict:
         print(f"{Fore.RED}[!] No results found. Report skipped.{Fore.RESET}")
         return None
