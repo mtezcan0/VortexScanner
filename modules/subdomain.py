@@ -20,7 +20,7 @@ def request_dns(target):
         status_code = "N/A"
 
         try:
-            response = requests.get(f"http://{target}", timeout=3, allow_redirects=True)
+            response = requests.get(f"http://{target}", timeout=2, allow_redirects=True)
             status_code = response.status_code
         except:
             status_code = "TIMEOUT"
@@ -35,9 +35,12 @@ def request_dns(target):
 
 def worker(q):
     while not q.empty():
-        target = q.get()
-        request_dns(target)
-        q.task_done()
+        try:
+            target = q.get_nowait()
+            request_dns(target)
+            q.task_done()
+        except:
+            break
 
 def start_subdomain_scan(domain, wordlist_path, thread_count=50):
     q = Queue()
