@@ -32,15 +32,30 @@ async def resolve_dns(resolver, session, full_domain, semaphore):
 async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", concurrency=100):
     found_subdomains.clear()
     
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    wordlist_path = os.path.join(base_dir, "data", wordlist_name)
+   
+   
+    if os.path.exists(wordlist_name):
+        wordlist_path = wordlist_name
+    else:
+        
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        clean_name = os.path.basename(wordlist_name)
+        wordlist_path = os.path.join(base_dir, "data", clean_name)
     
     resolver = aiodns.DNSResolver()
     semaphore = asyncio.Semaphore(concurrency)
     root_domain = domain.strip('.')
     
     print(f"{Fore.BLUE}[*] Starting Async Scan: {root_domain}")
-    print(f"[*] Max Concurrency: {concurrency}\n{Fore.RESET}")
+    print(f"[*] Max Concurrency: {concurrency}")
+    
+    
+    if os.path.exists(wordlist_path):
+        print(f"{Fore.CYAN}[*] Using Wordlist: {wordlist_path}{Fore.RESET}\n")
+    else:
+        print(f"{Fore.RED}[!] Wordlist NOT found at: {wordlist_path}{Fore.RESET}")
+        print(f"{Fore.RED}[!] Scanning only root domain...{Fore.RESET}\n")
 
     conn = aiohttp.TCPConnector(ssl=False, limit=0, limit_per_host=0)
     headers = {
@@ -58,8 +73,6 @@ async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", con
                     if sub:
                         full_domain = f"{sub}.{root_domain}"
                         tasks.append(resolve_dns(resolver, session, full_domain, semaphore))
-        else:
-            print(f"{Fore.RED}[!] Wordlist not found at: {wordlist_path}{Fore.RESET}")
         
         await asyncio.gather(*tasks)
     
