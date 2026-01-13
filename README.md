@@ -72,4 +72,3 @@ Usage of Vortex for attacking targets without prior mutual consent is illegal. I
 Developed by Mehmet Tezcan | Junior Penetration Tester & Computer Engineering Student
 
 
-
