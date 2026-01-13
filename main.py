@@ -19,7 +19,7 @@ def print_banner():
   |___/\____/_/ |_| /_/ /_____//_/|_| 
 
   Vortex Cyber Scanner - Advanced Recon Edition (2026)
-  Developed by Mehmet Tezcan 
+  Developed by Mehmet Tezcan | KTÜN Computer Engineering
   ============================================================
     """
     print(f"{Fore.CYAN}{Style.BRIGHT}{banner}")
@@ -95,9 +95,12 @@ async def main():
     duration = round(end_time - start_time, 2)
     print(f"\n{Fore.GREEN}[*] Scan Complete in {duration} seconds. Good luck!")
 
-if __name__ == "__main__":
+def run_main():
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print(f"\n{Fore.RED}[!] Scan interrupted by user.")
         sys.exit(0)
+
+if __name__ == "__main__":
+    run_main()
