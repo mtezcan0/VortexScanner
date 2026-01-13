@@ -1,34 +1,30 @@
 ###############################################################################
-# VORTEX CYBER SCANNER - Dependency Manifest
+# VORTEX CYBER SCANNER - Dependency Manifest (2026 Edition)
 # 
-# This file contains the necessary libraries for:
-# 1. Subdomain Enumeration (Network & DNS)
-# 2. Web Crawling & HTML Parsing (Reconnaissance)
-# 3. Multi-threaded Vulnerability Testing (SQLi/XSS)
-# 4. Professional Reporting Engine
+# This manifest ensures all modules for the Vortex Recon Engine are installed.
 ###############################################################################
 
-# --- Core Networking & HTTP Stack ---
-# Used for sending automated GET/POST requests and session management.
-requests>=2.31.0
-# Provides thread-safe connection pooling (dependency of requests).
-urllib3>=2.0.0
+# --- Core Networking & HTTP Analysis ---
+# Handles status code verification (200, 404, etc.) and redirect tracking.
+requests>=2.32.0
+# Thread-safe HTTP connection management (Required by Requests).
+urllib3>=2.2.0
 
-# --- Web Intelligence & Parsing ---
-# Essential for extracting HTML forms, inputs, and action URLs.
-beautifulsoup4>=4.12.2
-# High-performance C-based HTML/XML parser for faster crawling.
-lxml>=4.9.3
+# --- Intelligence & HTML Analysis ---
+# Future-proofing for web crawling and link extraction.
+beautifulsoup4>=4.12.3
+# Fast C-based parser for high-speed HTML data processing.
+lxml>=5.1.0
 
 # --- Terminal UI & UX Aesthetics ---
-# Cross-platform support for colored terminal output (Fore/Style).
+# Provides cross-platform colored output for scan results.
 colorama>=0.4.6
-# Generates professional ASCII Art banners for the CLI interface.
+# Renders the "VORTEX" ASCII art banner during startup.
 pyfiglet>=1.0.2
 
 # --- Data Validation & Helpers ---
-# Used for ensuring URLs and inputs are syntactically correct.
-validators>=0.22.0
+# Used for sanitizing target domains and IP inputs.
+validators>=0.28.0
 
 ###############################################################################
 # Installation: pip install -r requirements.txt
