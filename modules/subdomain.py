@@ -1,82 +1,60 @@
-import socket
-import threading
-import requests
+import asyncio
+import aiodns
+import aiohttp
 import os
 import datetime
-from queue import Queue
 from colorama import Fore
 
 found_subdomains = {}
-print_lock = threading.Lock()
 
-def request_dns(target):
-    target = target.strip('.')
-    
-    if not target or '..' in target:
-        return
-
+async def check_http(session, target):
     try:
-        ip = socket.gethostbyname(target)
-        status_code = "N/A"
+        async with session.get(f"http://{target}", timeout=2, allow_redirects=True) as response:
+            return response.status
+    except:
+        return "TIMEOUT"
 
+async def resolve_dns(resolver, session, full_domain, semaphore):
+    async with semaphore:
         try:
-            response = requests.get(f"http://{target}", timeout=2, allow_redirects=True)
-            status_code = response.status_code
+            result = await resolver.query(full_domain, 'A')
+            ip = result[0].host
+            status = await check_http(session, full_domain)
+            
+            color = Fore.GREEN if status == 200 else Fore.YELLOW
+            print(f"{color}[+] Found: {full_domain:<25} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
+            
+            found_subdomains[full_domain] = {"ip": ip, "status": status}
         except:
-            status_code = "TIMEOUT"
+            pass
 
-        with print_lock:
-            color = Fore.GREEN if status_code == 200 else Fore.YELLOW
-            print(f"{color}[+] Found: {target:<25} | IP: {ip:<15} | Status: {status_code}{Fore.RESET}")
-            found_subdomains[target] = {"ip": ip, "status": status_code}
-
-    except (socket.gaierror, socket.timeout, UnicodeError):
-        pass
-
-def worker(q):
-    while not q.empty():
-        try:
-            target = q.get_nowait()
-            request_dns(target)
-            q.task_done()
-        except:
-            break
-
-def start_subdomain_scan(domain, wordlist_path, thread_count=50):
-    q = Queue()
+async def start_subdomain_scan_async(domain, wordlist_path, concurrency=100):
     found_subdomains.clear()
-
+    resolver = aiodns.DNSResolver()
+    semaphore = asyncio.Semaphore(concurrency)
+    
     root_domain = domain.strip('.')
-    q.put(root_domain)
+    
+    print(f"{Fore.BLUE}[*] Starting Async Scan: {root_domain}")
+    print(f"[*] Max Concurrency: {concurrency}\n{Fore.RESET}")
 
-    try:
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+        tasks = []
+        tasks.append(resolve_dns(resolver, session, root_domain, semaphore))
+        
         if os.path.exists(wordlist_path):
             with open(wordlist_path, 'r', encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     sub = line.strip().strip('.')
                     if sub:
-                        q.put(f"{sub}.{root_domain}")
-        else:
-            print(f"{Fore.RED}[!] Wordlist file not found. Scanning root domain only.{Fore.RESET}")
-    except Exception as e:
-        print(f"{Fore.RED}[!] Error reading wordlist: {e}{Fore.RESET}")
+                        tasks.append(resolve_dns(resolver, session, f"{sub}.{root_domain}", semaphore))
+        
+        await asyncio.gather(*tasks)
     
-    print(f"{Fore.BLUE}[*] Starting Scan: {root_domain}")
-    print(f"[*] Threads: {thread_count}\n{Fore.RESET}")
-
-    threads = []
-    for _ in range(thread_count):
-        t = threading.Thread(target=worker, args=(q,))
-        t.daemon = True 
-        t.start()
-        threads.append(t)
-
-    q.join()
     return found_subdomains
 
 def save_subdomain_report(target, results_dict):
     if not results_dict:
-        print(f"{Fore.RED}[!] No results found. Report skipped.{Fore.RESET}")
         return None
 
     if not os.path.exists("reports"):
@@ -88,7 +66,7 @@ def save_subdomain_report(target, results_dict):
 
     with open(filename, "w", encoding="utf-8") as f:
         f.write("="*75 + "\n")
-        f.write(f"VORTEX SCANNER - RECON REPORT\n")
+        f.write(f"VORTEX SCANNER - ASYNC RECON REPORT\n")
         f.write(f"Target: {target} | Date: {timestamp}\n")
         f.write("="*75 + "\n\n")
         f.write(f"{'SUBDOMAIN':<35} | {'IP ADDRESS':<15} | {'STATUS':<10}\n")
@@ -97,5 +75,4 @@ def save_subdomain_report(target, results_dict):
         for sub, data in results_dict.items():
             f.write(f"{sub:<35} | {data['ip']:<15} | {data['status']:<10}\n")
             
-    print(f"\n{Fore.CYAN}[i] Report saved to: {filename}{Fore.RESET}")
     return filename
