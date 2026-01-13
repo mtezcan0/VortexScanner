@@ -1,0 +1,35 @@
+###############################################################################
+# VORTEX CYBER SCANNER - Dependency Manifest
+# 
+# This file contains the necessary libraries for:
+# 1. Subdomain Enumeration (Network & DNS)
+# 2. Web Crawling & HTML Parsing (Reconnaissance)
+# 3. Multi-threaded Vulnerability Testing (SQLi/XSS)
+# 4. Professional Reporting Engine
+###############################################################################
+
+# --- Core Networking & HTTP Stack ---
+# Used for sending automated GET/POST requests and session management.
+requests>=2.31.0
+# Provides thread-safe connection pooling (dependency of requests).
+urllib3>=2.0.0
+
+# --- Web Intelligence & Parsing ---
+# Essential for extracting HTML forms, inputs, and action URLs.
+beautifulsoup4>=4.12.2
+# High-performance C-based HTML/XML parser for faster crawling.
+lxml>=4.9.3
+
+# --- Terminal UI & UX Aesthetics ---
+# Cross-platform support for colored terminal output (Fore/Style).
+colorama>=0.4.6
+# Generates professional ASCII Art banners for the CLI interface.
+pyfiglet>=1.0.2
+
+# --- Data Validation & Helpers ---
+# Used for ensuring URLs and inputs are syntactically correct.
+validators>=0.22.0
+
+###############################################################################
+# Installation: pip install -r requirements.txt
+###############################################################################
