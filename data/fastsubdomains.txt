@@ -14,6 +14,8 @@ autodiscover
 autoconfig
 ns
 test
+testphp
+testasp
 m
 blog
 dev
@@ -25,6 +27,7 @@ admin
 mail2
 vpn
 mx
+testhtml5
 imap
 old
 new
@@ -37,6 +40,7 @@ secure
 shop
 demo
 dns2
+testaspnet
 ns4
 dns1
 static
