@@ -7,49 +7,74 @@ from colorama import Fore
 
 found_subdomains = {}
 
+
 DNS_SERVERS = [
-    '1.1.1.1', '1.0.0.1',
-    '8.8.8.8', '8.8.4.4',
-    '9.9.9.9', '149.112.112.112',
-    '208.67.222.222', '208.67.220.220'
+    '1.1.1.1', '8.8.8.8',           
+    '1.0.0.1', '8.8.4.4',           
+    '9.9.9.9'                       
 ]
 
-async def resolve_dns_fast(resolver, full_domain):
+async def resolve_dns_reliable(resolver, full_domain):
+    
     try:
         query_task = resolver.query(full_domain, 'A')
-        result = await asyncio.wait_for(query_task, timeout=2.0)
+        result = await asyncio.wait_for(query_task, timeout=4.0)
         return result[0].host
-    except (asyncio.TimeoutError, aiodns.error.DNSError):
+    except (aiodns.error.DNSError, asyncio.TimeoutError):
         return None
     except Exception:
         return None
 
-async def check_http_fast(session, target):
-    url = f"http://{target}"
+async def check_http_tolerant(session, target):
+   
+    url_http = f"http://{target}"
+    url_https = f"https://{target}"
+    
+    
     try:
-        async with session.get(url) as response:
+        async with session.get(url_http, allow_redirects=True) as response:
             return response.status
-    except:
-        return None
+    except (aiohttp.ClientConnectorError, asyncio.TimeoutError, aiohttp.ServerDisconnectedError):
+        
+        pass 
+    except Exception:
+        pass 
+
+    try:
+        async with session.get(url_https, allow_redirects=True, ssl=False) as response:
+            return response.status
+    except aiohttp.ClientConnectorError:
+        return "CONN_REFUSED" 
+    except asyncio.TimeoutError:
+        return "HTTP_TIMEOUT" 
+    except Exception:
+        return "ERROR"
+
+    return "CONN_REFUSED"
 
 async def worker(queue, resolver, session):
     while True:
         full_domain = await queue.get()
+        
         try:
-            ip = await resolve_dns_fast(resolver, full_domain)
+            ip = await resolve_dns_reliable(resolver, full_domain)
             
             if ip:
-                status = await check_http_fast(session, full_domain)
+                status_code = await check_http_tolerant(session, full_domain)
                 
-                if status:
-                    if status == 200:
-                        print(f"{Fore.GREEN}[+] Found: {full_domain:<35} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
-                    else:
-                        print(f"{Fore.YELLOW}[+] Found: {full_domain:<35} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
-                    
-                    found_subdomains[full_domain] = {"ip": ip, "status": status}
-        except Exception:
+                
+                if isinstance(status_code, int):
+                    color = Fore.GREEN if status_code < 400 else Fore.YELLOW
+                    print(f"{color}[+] Found (WEB): {full_domain:<35} | IP: {ip:<15} | Status: {status_code}{Fore.RESET}")
+                    found_subdomains[full_domain] = {"ip": ip, "status": status_code}
+                
+                elif status_code in ["HTTP_TIMEOUT", "CONN_REFUSED", "ERROR"]:
+                    print(f"{Fore.MAGENTA}[+] Found (DNS): {full_domain:<35} | IP: {ip:<15} | Status: DNS-ONLY ({status_code}){Fore.RESET}")
+                    found_subdomains[full_domain] = {"ip": ip, "status": "DNS-ONLY"}
+
+        except Exception as e:
             pass
+        
         finally:
             queue.task_done()
 
@@ -63,30 +88,31 @@ async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", con
         clean_name = os.path.basename(wordlist_name)
         wordlist_path = os.path.join(base_dir, "data", clean_name)
     
-    print(f"{Fore.BLUE}[*] Starting Optimized Scan: {domain}")
-    print(f"[*] DNS Servers: Rotating {len(DNS_SERVERS)} providers")
-    print(f"[*] Max Concurrency: {concurrency}")
+    print(f"{Fore.BLUE}[*] Starting Tolerant Scan: {domain}")
+    print(f"[*] DNS Policy: Reliable Servers (rotate=False)")
+    print(f"[*] HTTP Policy: HTTP -> HTTPS Fallback Enabled")
     
     if not os.path.exists(wordlist_path):
         print(f"{Fore.RED}[!] Wordlist NOT found at: {wordlist_path}{Fore.RESET}")
         return found_subdomains
 
     queue = asyncio.Queue()
-    
     queue.put_nowait(domain)
     
     with open(wordlist_path, 'r', encoding="utf-8", errors="ignore") as f:
+        count = 0
         for line in f:
             sub = line.strip().strip('.')
             if sub:
                 full_domain = f"{sub}.{domain}"
                 queue.put_nowait(full_domain)
+                count += 1
     
-    print(f"{Fore.CYAN}[*] Loaded tasks into Queue. Workers starting...{Fore.RESET}\n")
+    print(f"{Fore.CYAN}[*] Loaded {count} targets. Workers initialized.{Fore.RESET}\n")
 
-    resolver = aiodns.DNSResolver(nameservers=DNS_SERVERS, rotate=True, timeout=2)
+    resolver = aiodns.DNSResolver(nameservers=DNS_SERVERS, rotate=False, timeout=4)
     
-    timeout_settings = aiohttp.ClientTimeout(total=3, connect=2, sock_connect=2)
+    timeout_settings = aiohttp.ClientTimeout(total=8, connect=3, sock_connect=3)
     conn = aiohttp.TCPConnector(ssl=False, limit=0, limit_per_host=0)
     
     async with aiohttp.ClientSession(connector=conn, timeout=timeout_settings) as session:
@@ -99,7 +125,7 @@ async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", con
         
         for task in workers:
             task.cancel()
-    
+            
     return found_subdomains
 
 def save_subdomain_report(target, results_dict):
@@ -124,7 +150,10 @@ def save_subdomain_report(target, results_dict):
         f.write(f"{'SUBDOMAIN':<35} | {'IP ADDRESS':<15} | {'STATUS':<10}\n")
         f.write("-" * 75 + "\n")
         
-        for sub, data in results_dict.items():
-            f.write(f"{sub:<35} | {data['ip']:<15} | {data['status']:<10}\n")
+        sorted_results = sorted(results_dict.items(), key=lambda x: str(x[1]['status']))
+        
+        for sub, data in sorted_results:
+            status = str(data['status'])
+            f.write(f"{sub:<35} | {data['ip']:<15} | {status:<10}\n")
             
     return filename
