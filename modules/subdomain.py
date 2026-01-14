@@ -7,15 +7,7 @@ from colorama import Fore
 
 found_subdomains = {}
 
-
-DNS_SERVERS = [
-    '1.1.1.1', '8.8.8.8',           
-    '1.0.0.1', '8.8.4.4',           
-    '9.9.9.9'                       
-]
-
 async def resolve_dns_reliable(resolver, full_domain):
-    
     try:
         query_task = resolver.query(full_domain, 'A')
         result = await asyncio.wait_for(query_task, timeout=4.0)
@@ -26,30 +18,27 @@ async def resolve_dns_reliable(resolver, full_domain):
         return None
 
 async def check_http_tolerant(session, target):
-   
     url_http = f"http://{target}"
     url_https = f"https://{target}"
     
+    req_headers = {"Host": target}
     
     try:
-        async with session.get(url_http, allow_redirects=True) as response:
+        async with session.get(url_http, allow_redirects=True, headers=req_headers) as response:
             return response.status
-    except (aiohttp.ClientConnectorError, asyncio.TimeoutError, aiohttp.ServerDisconnectedError):
-        
-        pass 
-    except Exception:
+    except:
         pass 
 
     try:
-        async with session.get(url_https, allow_redirects=True, ssl=False) as response:
+        async with session.get(url_https, allow_redirects=True, ssl=False, headers=req_headers) as response:
             return response.status
     except aiohttp.ClientConnectorError:
-        return "CONN_REFUSED" 
+        return "CONN_REFUSED"
     except asyncio.TimeoutError:
-        return "HTTP_TIMEOUT" 
+        return "HTTP_TIMEOUT"
     except Exception:
         return "ERROR"
-
+    
     return "CONN_REFUSED"
 
 async def worker(queue, resolver, session):
@@ -62,7 +51,6 @@ async def worker(queue, resolver, session):
             if ip:
                 status_code = await check_http_tolerant(session, full_domain)
                 
-                
                 if isinstance(status_code, int):
                     color = Fore.GREEN if status_code < 400 else Fore.YELLOW
                     print(f"{color}[+] Found (WEB): {full_domain:<35} | IP: {ip:<15} | Status: {status_code}{Fore.RESET}")
@@ -72,9 +60,8 @@ async def worker(queue, resolver, session):
                     print(f"{Fore.MAGENTA}[+] Found (DNS): {full_domain:<35} | IP: {ip:<15} | Status: DNS-ONLY ({status_code}){Fore.RESET}")
                     found_subdomains[full_domain] = {"ip": ip, "status": "DNS-ONLY"}
 
-        except Exception as e:
+        except Exception:
             pass
-        
         finally:
             queue.task_done()
 
@@ -88,9 +75,8 @@ async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", con
         clean_name = os.path.basename(wordlist_name)
         wordlist_path = os.path.join(base_dir, "data", clean_name)
     
-    print(f"{Fore.BLUE}[*] Starting Tolerant Scan: {domain}")
-    print(f"[*] DNS Policy: Reliable Servers (rotate=False)")
-    print(f"[*] HTTP Policy: HTTP -> HTTPS Fallback Enabled")
+    print(f"{Fore.BLUE}[*] Starting System-DNS Scan: {domain}")
+    print(f"[*] Policy: Host Header Forcing + Real UA + System DNS")
     
     if not os.path.exists(wordlist_path):
         print(f"{Fore.RED}[!] Wordlist NOT found at: {wordlist_path}{Fore.RESET}")
@@ -110,12 +96,16 @@ async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", con
     
     print(f"{Fore.CYAN}[*] Loaded {count} targets. Workers initialized.{Fore.RESET}\n")
 
-    resolver = aiodns.DNSResolver(nameservers=DNS_SERVERS, rotate=False, timeout=4)
+    resolver = aiodns.DNSResolver(timeout=5)
     
-    timeout_settings = aiohttp.ClientTimeout(total=8, connect=3, sock_connect=3)
+    timeout_settings = aiohttp.ClientTimeout(total=6, connect=3, sock_connect=3)
     conn = aiohttp.TCPConnector(ssl=False, limit=0, limit_per_host=0)
     
-    async with aiohttp.ClientSession(connector=conn, timeout=timeout_settings) as session:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    }
+    
+    async with aiohttp.ClientSession(connector=conn, timeout=timeout_settings, headers=headers) as session:
         workers = []
         for _ in range(concurrency):
             task = asyncio.create_task(worker(queue, resolver, session))
