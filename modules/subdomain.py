@@ -7,6 +7,13 @@ from colorama import Fore
 
 found_subdomains = {}
 
+DNS_SERVERS = [
+    '1.1.1.1', '1.0.0.1',
+    '8.8.8.8', '8.8.4.4',
+    '9.9.9.9', '149.112.112.112',
+    '208.67.222.222', '208.67.220.220'
+]
+
 async def check_http(session, target):
     try:
         url = f"http://{target}"
@@ -15,41 +22,51 @@ async def check_http(session, target):
     except:
         return "TIMEOUT"
 
-async def resolve_dns(resolver, session, full_domain, semaphore):
-    async with semaphore:
+async def resolve_dns_retry(resolver, full_domain):
+    for attempt in range(2):
         try:
             result = await resolver.query(full_domain, 'A')
-            ip = result[0].host
+            return result[0].host
+        except aiodns.error.DNSError:
+            break
+        except Exception:
+            if attempt == 0:
+                await asyncio.sleep(0.1)
+                continue
+            break
+    return None
+
+async def worker(resolver, session, full_domain, semaphore):
+    async with semaphore:
+        ip = await resolve_dns_retry(resolver, full_domain)
+        
+        if ip:
             status = await check_http(session, full_domain)
             
-            color = Fore.GREEN if status == 200 else Fore.YELLOW
-            print(f"{color}[+] Found: {full_domain:<30} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
+            if status == 200:
+                print(f"{Fore.GREEN}[+] Found: {full_domain:<35} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
+            else:
+                print(f"{Fore.YELLOW}[+] Found: {full_domain:<35} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
             
             found_subdomains[full_domain] = {"ip": ip, "status": status}
-        except:
-            pass
 
 async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", concurrency=100):
     found_subdomains.clear()
     
-    
-   
     if os.path.exists(wordlist_name):
         wordlist_path = wordlist_name
     else:
-        
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
         clean_name = os.path.basename(wordlist_name)
         wordlist_path = os.path.join(base_dir, "data", clean_name)
     
-    resolver = aiodns.DNSResolver()
+    resolver = aiodns.DNSResolver(nameservers=DNS_SERVERS, rotate=True, timeout=2)
     semaphore = asyncio.Semaphore(concurrency)
     root_domain = domain.strip('.')
     
-    print(f"{Fore.BLUE}[*] Starting Async Scan: {root_domain}")
+    print(f"{Fore.BLUE}[*] Starting Optimized Scan: {root_domain}")
+    print(f"[*] DNS Servers: Rotating {len(DNS_SERVERS)} providers")
     print(f"[*] Max Concurrency: {concurrency}")
-    
     
     if os.path.exists(wordlist_path):
         print(f"{Fore.CYAN}[*] Using Wordlist: {wordlist_path}{Fore.RESET}\n")
@@ -64,7 +81,7 @@ async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", con
 
     async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
         tasks = []
-        tasks.append(resolve_dns(resolver, session, root_domain, semaphore))
+        tasks.append(worker(resolver, session, root_domain, semaphore))
         
         if os.path.exists(wordlist_path):
             with open(wordlist_path, 'r', encoding="utf-8", errors="ignore") as f:
@@ -72,7 +89,7 @@ async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", con
                     sub = line.strip().strip('.')
                     if sub:
                         full_domain = f"{sub}.{root_domain}"
-                        tasks.append(resolve_dns(resolver, session, full_domain, semaphore))
+                        tasks.append(worker(resolver, session, full_domain, semaphore))
         
         await asyncio.gather(*tasks)
     

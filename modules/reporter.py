@@ -6,14 +6,12 @@ def generate_reports(target, results_dict):
     if not results_dict:
         return None
 
-    
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     report_dir = os.path.join(base_dir, "reports")
     
     if not os.path.exists(report_dir):
         os.makedirs(report_dir)
 
-    
     total_scanned = len(results_dict)
     active_sites = sum(1 for data in results_dict.values() if data.get('status') == 200)
     
@@ -34,9 +32,10 @@ def generate_reports(target, results_dict):
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     file_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-    filename = os.path.join(report_dir, f"{target}_vortex_report_{file_ts}.html")
-
     
+    safe_target = target.replace("http://", "").replace("https://", "").replace("/", "_").replace(":", "_")
+    filename = os.path.join(report_dir, f"{safe_target}_vortex_report_{file_ts}.html")
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -61,31 +60,26 @@ def generate_reports(target, results_dict):
             body {{ font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); margin: 0; padding: 40px; line-height: 1.5; }}
             .container {{ max-width: 1200px; margin: 0 auto; }}
             
-            /* Header */
             .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 30px; }}
             .brand h1 {{ margin: 0; font-size: 24px; letter-spacing: -0.5px; background: linear-gradient(90deg, #58a6ff, #a371f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
             .meta {{ text-align: right; font-size: 13px; color: var(--text-muted); }}
 
-            /* Stats Cards */
             .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 40px; }}
             .stat-card {{ background: var(--card-bg); border: 1px solid var(--border); padding: 20px; border-radius: 8px; transition: transform 0.2s; }}
             .stat-card:hover {{ transform: translateY(-2px); border-color: var(--accent); }}
             .stat-value {{ font-size: 28px; font-weight: 800; display: block; margin-bottom: 5px; }}
             .stat-label {{ font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 600; }}
             
-            /* Table */
             .table-container {{ background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }}
             table {{ width: 100%; border-collapse: collapse; }}
             th {{ background: #21262d; padding: 15px; text-align: left; font-size: 12px; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); }}
             td {{ padding: 15px; border-bottom: 1px solid var(--border); vertical-align: top; }}
             tr:last-child td {{ border-bottom: none; }}
             
-            /* Status Badges */
             .badge {{ display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }}
             .badge-live {{ background: rgba(35, 134, 54, 0.15); color: #3fb950; border: 1px solid rgba(35, 134, 54, 0.4); }}
             .badge-dead {{ background: rgba(248, 81, 73, 0.15); color: var(--danger); border: 1px solid rgba(248, 81, 73, 0.4); }}
             
-            /* Vulnerabilities */
             .vuln-box {{ margin-top: 10px; background: rgba(13, 17, 23, 0.5); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }}
             .vuln-item {{ padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; display: flex; align-items: baseline; gap: 10px; }}
             .vuln-item:last-child {{ border-bottom: none; }}
@@ -156,12 +150,10 @@ def generate_reports(target, results_dict):
                             <td>
         """
         
-        
         forms_found = findings.get('forms_found', 0)
         if forms_found > 0:
              html_content += f'<div style="margin-bottom:8px; font-size:12px; color:var(--success);">✓ {forms_found} form(s) discovered</div>'
 
-        
         if vulns:
             html_content += '<div class="vuln-box">'
             for v in vulns:
