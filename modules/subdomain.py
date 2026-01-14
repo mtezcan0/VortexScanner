@@ -14,43 +14,46 @@ DNS_SERVERS = [
     '208.67.222.222', '208.67.220.220'
 ]
 
-async def check_http(session, target):
+async def resolve_dns_fast(resolver, full_domain):
     try:
-        url = f"http://{target}"
-        async with session.get(url, timeout=3, allow_redirects=True) as response:
+        query_task = resolver.query(full_domain, 'A')
+        result = await asyncio.wait_for(query_task, timeout=2.0)
+        return result[0].host
+    except (asyncio.TimeoutError, aiodns.error.DNSError):
+        return None
+    except Exception:
+        return None
+
+async def check_http_fast(session, target):
+    url = f"http://{target}"
+    try:
+        async with session.get(url) as response:
             return response.status
     except:
-        return "TIMEOUT"
+        return None
 
-async def resolve_dns_retry(resolver, full_domain):
-    for attempt in range(2):
+async def worker(queue, resolver, session):
+    while True:
+        full_domain = await queue.get()
         try:
-            result = await resolver.query(full_domain, 'A')
-            return result[0].host
-        except aiodns.error.DNSError:
-            break
+            ip = await resolve_dns_fast(resolver, full_domain)
+            
+            if ip:
+                status = await check_http_fast(session, full_domain)
+                
+                if status:
+                    if status == 200:
+                        print(f"{Fore.GREEN}[+] Found: {full_domain:<35} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
+                    else:
+                        print(f"{Fore.YELLOW}[+] Found: {full_domain:<35} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
+                    
+                    found_subdomains[full_domain] = {"ip": ip, "status": status}
         except Exception:
-            if attempt == 0:
-                await asyncio.sleep(0.1)
-                continue
-            break
-    return None
+            pass
+        finally:
+            queue.task_done()
 
-async def worker(resolver, session, full_domain, semaphore):
-    async with semaphore:
-        ip = await resolve_dns_retry(resolver, full_domain)
-        
-        if ip:
-            status = await check_http(session, full_domain)
-            
-            if status == 200:
-                print(f"{Fore.GREEN}[+] Found: {full_domain:<35} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
-            else:
-                print(f"{Fore.YELLOW}[+] Found: {full_domain:<35} | IP: {ip:<15} | Status: {status}{Fore.RESET}")
-            
-            found_subdomains[full_domain] = {"ip": ip, "status": status}
-
-async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", concurrency=100):
+async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", concurrency=50):
     found_subdomains.clear()
     
     if os.path.exists(wordlist_name):
@@ -60,38 +63,42 @@ async def start_subdomain_scan_async(domain, wordlist_name="subdomains.txt", con
         clean_name = os.path.basename(wordlist_name)
         wordlist_path = os.path.join(base_dir, "data", clean_name)
     
-    resolver = aiodns.DNSResolver(nameservers=DNS_SERVERS, rotate=True, timeout=2)
-    semaphore = asyncio.Semaphore(concurrency)
-    root_domain = domain.strip('.')
-    
-    print(f"{Fore.BLUE}[*] Starting Optimized Scan: {root_domain}")
+    print(f"{Fore.BLUE}[*] Starting Optimized Scan: {domain}")
     print(f"[*] DNS Servers: Rotating {len(DNS_SERVERS)} providers")
     print(f"[*] Max Concurrency: {concurrency}")
     
-    if os.path.exists(wordlist_path):
-        print(f"{Fore.CYAN}[*] Using Wordlist: {wordlist_path}{Fore.RESET}\n")
-    else:
+    if not os.path.exists(wordlist_path):
         print(f"{Fore.RED}[!] Wordlist NOT found at: {wordlist_path}{Fore.RESET}")
-        print(f"{Fore.RED}[!] Scanning only root domain...{Fore.RESET}\n")
+        return found_subdomains
 
+    queue = asyncio.Queue()
+    
+    queue.put_nowait(domain)
+    
+    with open(wordlist_path, 'r', encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            sub = line.strip().strip('.')
+            if sub:
+                full_domain = f"{sub}.{domain}"
+                queue.put_nowait(full_domain)
+    
+    print(f"{Fore.CYAN}[*] Loaded tasks into Queue. Workers starting...{Fore.RESET}\n")
+
+    resolver = aiodns.DNSResolver(nameservers=DNS_SERVERS, rotate=True, timeout=2)
+    
+    timeout_settings = aiohttp.ClientTimeout(total=3, connect=2, sock_connect=2)
     conn = aiohttp.TCPConnector(ssl=False, limit=0, limit_per_host=0)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-
-    async with aiohttp.ClientSession(connector=conn, headers=headers) as session:
-        tasks = []
-        tasks.append(worker(resolver, session, root_domain, semaphore))
+    
+    async with aiohttp.ClientSession(connector=conn, timeout=timeout_settings) as session:
+        workers = []
+        for _ in range(concurrency):
+            task = asyncio.create_task(worker(queue, resolver, session))
+            workers.append(task)
         
-        if os.path.exists(wordlist_path):
-            with open(wordlist_path, 'r', encoding="utf-8", errors="ignore") as f:
-                for line in f:
-                    sub = line.strip().strip('.')
-                    if sub:
-                        full_domain = f"{sub}.{root_domain}"
-                        tasks.append(worker(resolver, session, full_domain, semaphore))
+        await queue.join()
         
-        await asyncio.gather(*tasks)
+        for task in workers:
+            task.cancel()
     
     return found_subdomains
 
