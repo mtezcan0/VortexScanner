@@ -72,19 +72,19 @@ Flag                            Argument                            Description	
 Project Structure
 
 VortexScanner/
-├── main.py              # Main CLI Entry Point & Async Loop
-├── setup.py             # Package Configuration
-├── requirements.txt     # Python Dependencies
+├── main.py               # Main CLI Entry Point & Async Loop
+├── setup.py              # Package Configuration
+├── requirements.txt      # Python Dependencies
 ├── data/
-│   ├── subdomains.txt   # Subdomain Wordlist
-│   ├── sqli_payloads.txt# SQL Injection Payloads
-│   └── xss_payloads.txt # XSS Payloads
+│   ├── subdomains.txt    # Subdomain Wordlist
+│   ├── sqli_payloads.txt # SQL Injection Payloads
+│   └── xss_payloads.txt  # XSS Payloads
 ├── modules/
-│   ├── subdomain.py     # Async DNS Enumeration
-│   ├── crawler.py       # Non-blocking Web Crawler
-│   ├── scanner.py       # Vulnerability Testing Engine
-│   └── reporter.py      # HTML/JSON Report Generator
-└── reports/             # Generated Scan Results
+│   ├── subdomain.py      # Async DNS Enumeration
+│   ├── crawler.py        # Non-blocking Web Crawler
+│   ├── scanner.py        # Vulnerability Testing Engine
+│   └── reporter.py       # HTML/JSON Report Generator
+└── reports/              # Generated Scan Results
 
 
 
